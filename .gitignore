@@ -1,0 +1,21 @@
+# 运行时敏感/本机文件
+data/config.php
+data/*.db
+data/*.sqlite
+data/*.log
+data/cacert.pem
+data/uploads/
+data/sessions/
+
+# 环境与密钥
+.env
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

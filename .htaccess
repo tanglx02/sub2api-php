@@ -1,0 +1,22 @@
+# Sub2API-PHP Apache 伪静态与安全规则
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # 静态资源直接访问
+    RewriteCond %{REQUEST_URI} ^/assets/ [OR]
+    RewriteCond %{REQUEST_URI} ^/cron\.php$
+    RewriteRule ^ - [L]
+    # 其余全部交给前端控制器
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# 禁止访问敏感文件
+<FilesMatch "\.(sql|db|sqlite|sqlite3|log|md|lock|env|ini)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(config\.php|composer\.json|composer\.lock|\.env.*)$">
+    Require all denied
+</FilesMatch>
