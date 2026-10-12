@@ -156,3 +156,11 @@
 3. **API Key 绑定分组**：用户端/管理员"我的 Key"均可自由创建多个 Key 并选择绑定分组；网关按 Key 的分组选择渠道——绑定哪个分组就只能调用该分组渠道上的模型（生产实测：绑 default 分组的 Key 调 deepseek-chat 成功、调不存在模型 404 ✅）；管理员导航新增"我的 Key"
 
 回归：SQLite 46/46 通过。
+
+## 10. 第四轮：生产全功能对照验收（41/41 通过）
+
+- 对照上游 sub2api 核心功能编写 41 项自动化验收，在生产环境（IIS + MySQL 5.7 + 真实 DeepSeek API）全部通过。
+- 验收中发现并修复 2 个真实缺陷：
+  1. `myKeyCreate` 在 `Audit::log` 之后调用 `DB::lastId()`，返回的是审计日志 id 而非 Key id，导致"我的 Key"编辑/禁用失败（生产实测复现）。已改为 INSERT 后立即取 id。
+  2. `myKeyUpdate` 不支持 `rate_limit_rpm`/`group_id`/`quota_limit`/`expires_at` 字段，用户侧无法设置 Key 限流与换绑分组。已补全（含分组存在性校验）。
+- 覆盖项：登录/CSRF/越权、仪表盘、统计报表、用户/分组/渠道/Key/模型价格 CRUD、`_method` 覆写（WAF 兼容）、一键获取上游模型（真实 DeepSeek 返回 deepseek-flash/deepseek-v4-pro）、渠道模型定时同步、网关四路径（/v1/models、非流式、SSE 流式含 usage、404/401/403 错误路径）、Anthropic 协议、兑换码、限流 429、cron 触发与错误 token 拒绝、审计、余额与计费一致性（balance = 100 - 消费）。

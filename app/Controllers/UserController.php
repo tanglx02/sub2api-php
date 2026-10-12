@@ -43,8 +43,9 @@ final class UserController
         DB::run('INSERT INTO api_keys (user_id, key_hash, key_prefix, name, group_id, quota_limit, rate_limit_rpm, expires_at, created_at)
                  VALUES (?,?,?,?,?,?,?,?,?)',
             [(int)$u['id'], Crypto::apiKeyHash($key), Crypto::apiKeyPrefix($key), $name, $gid, $quota, $rpm, $expires, gmdate('Y-m-d H:i:s')]);
-        Audit::log((int)$u['id'], 'key_create', detail: ['target_id' => DB::lastId()]);
-        Http::ok(['key' => $key, 'id' => DB::lastId()]); // 明文仅此一次返回
+        $keyId = DB::lastId();
+        Audit::log((int)$u['id'], 'key_create', detail: ['target_id' => $keyId]);
+        Http::ok(['key' => $key, 'id' => $keyId]); // 明文仅此一次返回
     }
 
     public static function myKeyUpdate(array $p): never
@@ -59,6 +60,18 @@ final class UserController
         if ($status !== null && in_array($status, ['active', 'disabled'], true)) { $fields[] = 'status = ?'; $args[] = $status; }
         $name = Http::input('name');
         if ($name !== null && trim((string)$name) !== '') { $fields[] = 'name = ?'; $args[] = mb_substr(trim((string)$name), 0, 100); }
+        $groupId = Http::input('group_id');
+        if ($groupId !== null) {
+            $gid = $groupId !== '' && $groupId !== 0 ? (int)$groupId : null;
+            if ($gid !== null && !DB::one("SELECT id FROM groups WHERE id = ? AND status = 'active'", [$gid])) { Http::error('分组不存在或已停用', 422); }
+            $fields[] = 'group_id = ?'; $args[] = $gid;
+        }
+        if (Http::input('quota_limit') !== null) { $fields[] = 'quota_limit = ?'; $args[] = max(0.0, (float)Http::input('quota_limit')); }
+        if (Http::input('rate_limit_rpm') !== null) { $fields[] = 'rate_limit_rpm = ?'; $args[] = max(0, (int)Http::input('rate_limit_rpm')); }
+        if (Http::input('expires_at') !== null) {
+            $expires = Http::input('expires_at');
+            $fields[] = 'expires_at = ?'; $args[] = ($expires !== '' && $expires !== false) ? $expires : null;
+        }
         if ($fields === []) { Http::error('没有需要更新的字段', 422); }
         $args[] = $id;
         DB::run('UPDATE api_keys SET ' . implode(', ', $fields) . ' WHERE id = ?', $args);
