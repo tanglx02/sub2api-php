@@ -80,6 +80,13 @@ final class OpenAIController
                     }
                     continue;
                 }
+                if (!is_array($res['body'])) {
+                    // 上游返回 200 但响应体不是合法 JSON 对象：视为上游异常，可故障切换
+                    $lastError = '上游返回了无法解析的响应: ' . mb_substr(trim((string)$res['raw']), 0, 120);
+                    Billing::fail($requestId, $lastError, $duration);
+                    Channels::recordError((int)$ch['id'], $lastError);
+                    continue;
+                }
                 $usage = is_array($res['body']['usage'] ?? null) ? Billing::normalizeUsage($res['body']['usage']) : null;
                 $source = $usage !== null ? 'upstream' : 'estimated';
                 if ($usage === null) { $usage = self::estimateUsage($body, $res['body']); }

@@ -106,7 +106,13 @@ final class UpstreamClient
         $err = curl_error($ch);
         curl_close($ch);
         if ($raw === false) { return ['ok' => false, 'error' => '连接失败: ' . $err]; }
-        if ($status >= 200 && $status < 300) { return ['ok' => true]; }
+        if ($status >= 200 && $status < 300) {
+            // 必须是合法 JSON，防止把上游网页首页误判为连通
+            if (!is_array(json_decode((string)$raw, true))) {
+                return ['ok' => false, 'error' => 'HTTP 200 但返回的不是 JSON（通常是 Base URL 填错，例如应以 /v1 结尾）: ' . mb_substr(trim((string)$raw), 0, 150)];
+            }
+            return ['ok' => true];
+        }
         return ['ok' => false, 'error' => 'HTTP ' . $status . ': ' . mb_substr((string)$raw, 0, 300)];
     }
 
