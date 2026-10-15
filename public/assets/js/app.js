@@ -119,6 +119,20 @@ function modal(title, formEl, onSubmit) {
 
 const views = {};
 
+/* 查看 Key 完整明文（服务端解密后展示，可复制） */
+async function revealKey(url) {
+  const r = await api('GET', url);
+  const k = h('div', { class: 'kbd', style: 'user-select:all;word-break:break-all;padding:10px 12px;background:var(--bg, #f6f7f9);border-radius:8px' }, r.key);
+  const mask = h('div', { class: 'modal-mask' });
+  mask.append(h('div', { class: 'modal' }, h('h3', {}, '查看完整 Key'),
+    h('p', { class: 'muted' }, '请妥善保管，不要泄露给他人。'),
+    k,
+    h('div', { class: 'actions', style: 'margin-top:16px;justify-content:flex-end' },
+      h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(r.key); toast('已复制到剪贴板'); } catch { toast('复制失败，请手动选中复制', 'err'); } } }, '复制'),
+      h('button', { class: 'btn primary', onclick: () => mask.remove() }, '关闭'))));
+  document.body.append(mask);
+}
+
 /* 仪表盘 */
 views.dashboard = async () => {
   const d = await api('GET', '/api/admin/dashboard');
@@ -253,16 +267,17 @@ views.keys = async () => {
     k.group_name || h('span', { class: 'tag mut' }, '默认'), fmtMoney(k.quota_used) + (k.quota_limit > 0 ? ' / ' + fmtMoney(k.quota_limit) : ''),
     statusTag(k.status), k.request_count, fmtTime(k.last_used_at),
     h('div', { class: 'actions' },
+      h('button', { class: 'btn sm', onclick: () => revealKey(`/api/admin/keys/${k.id}/key`).catch(e => toast(e.message, 'err')) }, '查看'),
       h('button', { class: 'btn sm', onclick: async () => {
           if (!confirm('轮换将生成新密钥且旧密钥立即失效，确认？')) return;
           const r = await api('POST', `/api/admin/keys/${k.id}/rotate`);
-          alert('新密钥（仅显示一次）：\n' + r.key);
+          alert('新密钥（旧密钥已失效）：\n' + r.key);
         } }, '轮换'),
       h('button', { class: 'btn sm', onclick: () => adminEditKey(k) }, '编辑'),
       h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('删除该 Key？')) { await api('DELETE', '/api/admin/keys/' + k.id); render(); } } }, '删除')),
   ]);
   return [
-    h('div', { class: 'card' }, h('p', { class: 'muted' }, '数据库仅保存密钥哈希，创建/轮换时一次性展示完整 Key。')),
+    h('div', { class: 'card' }, h('p', { class: 'muted' }, '密钥加密存储，可点击"查看"随时获取完整 Key；轮换将生成新密钥并使旧密钥失效。')),
     tableView(['ID', '用户', '名称', '密钥', '分组', '已用配额', '状态', '请求数', '最后使用', '操作'], rows),
     pager(d.total, keyPage, 20, p => { keyPage = p; render(); })
   ];
@@ -587,6 +602,7 @@ views.mykeys = async () => {
     fmtMoney(k.quota_used) + (k.quota_limit > 0 ? '/' + fmtMoney(k.quota_limit) : ''), statusTag(k.status),
     k.request_count, fmtTime(k.last_used_at),
     h('div', { class: 'actions' },
+      h('button', { class: 'btn sm', onclick: () => revealKey(`/api/user/keys/${k.id}/key`).catch(e => toast(e.message, 'err')) }, '查看'),
       h('button', { class: 'btn sm', onclick: () => api('PUT', '/api/user/keys/' + k.id, { status: k.status === 'active' ? 'disabled' : 'active' }).then(render) }, k.status === 'active' ? '禁用' : '启用'),
       h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('删除该 Key？')) { await api('DELETE', '/api/user/keys/' + k.id); render(); } } }, '删除')),
   ]);
@@ -597,7 +613,7 @@ views.mykeys = async () => {
       h('select', { id: 'mk-group' }, h('option', { value: '' }, '不绑定分组（可调未绑分组的渠道）'), ...groups.map(g => h('option', { value: g.id }, g.name))),
       h('button', { class: 'btn primary', onclick: async () => {
           const r = await api('POST', '/api/user/keys', { name: $('#mk-name').value || '默认 Key', group_id: $('#mk-group').value || null });
-          alert('新 Key（仅显示一次，请立即复制）：\n\n' + r.key);
+          alert('新 Key 已创建，之后可在列表中随时点击查看获取：\n\n' + r.key);
           render();
         } }, '创建 Key'))),
     h('div', { class: 'card' },

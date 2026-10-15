@@ -40,12 +40,25 @@ final class UserController
         $expires = Http::input('expires_at');
         $expires = ($expires !== null && $expires !== '') ? $expires : null;
         $key = Crypto::generateApiKey();
-        DB::run('INSERT INTO api_keys (user_id, key_hash, key_prefix, name, group_id, quota_limit, rate_limit_rpm, expires_at, created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?)',
-            [(int)$u['id'], Crypto::apiKeyHash($key), Crypto::apiKeyPrefix($key), $name, $gid, $quota, $rpm, $expires, gmdate('Y-m-d H:i:s')]);
+        DB::run('INSERT INTO api_keys (user_id, key_hash, key_enc, key_prefix, name, group_id, quota_limit, rate_limit_rpm, expires_at, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+            [(int)$u['id'], Crypto::apiKeyHash($key), Crypto::encrypt($key), Crypto::apiKeyPrefix($key), $name, $gid, $quota, $rpm, $expires, gmdate('Y-m-d H:i:s')]);
         $keyId = DB::lastId();
         Audit::log((int)$u['id'], 'key_create', detail: ['target_id' => $keyId]);
-        Http::ok(['key' => $key, 'id' => $keyId]); // 明文仅此一次返回
+        Http::ok(['key' => $key, 'id' => $keyId]); // 同时加密存储，可在列表中随时查看
+    }
+
+    /** 随时查看 Key 明文（仅本人；加密存储，服务端解密） */
+    public static function myKeyReveal(array $p): never
+    {
+        $u = self::guard();
+        $k = DB::one('SELECT id, key_enc, key_prefix FROM api_keys WHERE id = ? AND user_id = ?', [(int)$p['id'], (int)$u['id']]);
+        if (!$k) { Http::error('Key 不存在', 404); }
+        if (empty($k['key_enc'])) { Http::error('该 Key 创建于旧版本（仅存哈希），无法回显，请轮换生成新 Key', 409); }
+        try { $plain = Crypto::decrypt((string)$k['key_enc']); }
+        catch (\Throwable) { Http::error('解密失败，请轮换生成新 Key', 500); }
+        Audit::log((int)$u['id'], 'key_reveal', detail: ['target_id' => (int)$k['id']]);
+        Http::ok(['key' => $plain, 'key_prefix' => $k['key_prefix']]);
     }
 
     public static function myKeyUpdate(array $p): never

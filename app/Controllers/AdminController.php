@@ -280,10 +280,23 @@ final class AdminController
         $id = (int)$p['id'];
         if (!DB::one('SELECT id FROM api_keys WHERE id = ?', [$id])) { Http::error('Key 不存在', 404); }
         $newKey = Crypto::generateApiKey();
-        DB::run('UPDATE api_keys SET key_hash = ?, key_prefix = ?, status = ?, quota_used = 0 WHERE id = ?',
-            [Crypto::apiKeyHash($newKey), Crypto::apiKeyPrefix($newKey), 'active', $id]);
+        DB::run('UPDATE api_keys SET key_hash = ?, key_enc = ?, key_prefix = ?, status = ?, quota_used = 0 WHERE id = ?',
+            [Crypto::apiKeyHash($newKey), Crypto::encrypt($newKey), Crypto::apiKeyPrefix($newKey), 'active', $id]);
         Audit::log((int)$admin['id'], 'key_rotate', detail: ['target_id' => $id]);
-        Http::ok(['key' => $newKey]); // 仅轮换时一次性返回
+        Http::ok(['key' => $newKey]);
+    }
+
+    /** 管理员查看任意 Key 明文（加密存储，服务端解密） */
+    public static function keyReveal(array $p): never
+    {
+        $admin = self::guard();
+        $k = DB::one('SELECT id, key_enc, key_prefix FROM api_keys WHERE id = ?', [(int)$p['id']]);
+        if (!$k) { Http::error('Key 不存在', 404); }
+        if (empty($k['key_enc'])) { Http::error('该 Key 创建于旧版本（仅存哈希），无法回显，请轮换生成新 Key', 409); }
+        try { $plain = Crypto::decrypt((string)$k['key_enc']); }
+        catch (\Throwable) { Http::error('解密失败，请轮换生成新 Key', 500); }
+        Audit::log((int)$admin['id'], 'key_reveal', detail: ['target_id' => (int)$k['id']]);
+        Http::ok(['key' => $plain, 'key_prefix' => $k['key_prefix']]);
     }
 
     // ---------------- 渠道管理 ----------------

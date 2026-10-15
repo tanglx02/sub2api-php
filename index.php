@@ -85,6 +85,7 @@ foreach ([
     ['PUT', '/api/admin/keys/{id}', [$g, 'keyUpdate']],
     ['DELETE', '/api/admin/keys/{id}', [$g, 'keyDelete']],
     ['POST', '/api/admin/keys/{id}/rotate', [$g, 'keyRotate']],
+    ['GET', '/api/admin/keys/{id}/key', [$g, 'keyReveal']],
     ['GET', '/api/admin/channels', [$g, 'channels']],
     ['POST', '/api/admin/channels', [$g, 'channelCreate']],
     ['POST', '/api/admin/channels/fetch-models', [$g, 'channelFetchModels']],
@@ -116,6 +117,7 @@ foreach ([
     ['POST', '/api/user/keys', [$u, 'myKeyCreate']],
     ['PUT', '/api/user/keys/{id}', [$u, 'myKeyUpdate']],
     ['DELETE', '/api/user/keys/{id}', [$u, 'myKeyDelete']],
+    ['GET', '/api/user/keys/{id}/key', [$u, 'myKeyReveal']],
     ['GET', '/api/user/usage', [$u, 'myUsage']],
     ['POST', '/api/user/redeem', [$u, 'redeem']],
 ] as $r) {

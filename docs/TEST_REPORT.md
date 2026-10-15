@@ -164,3 +164,10 @@
   1. `myKeyCreate` 在 `Audit::log` 之后调用 `DB::lastId()`，返回的是审计日志 id 而非 Key id，导致"我的 Key"编辑/禁用失败（生产实测复现）。已改为 INSERT 后立即取 id。
   2. `myKeyUpdate` 不支持 `rate_limit_rpm`/`group_id`/`quota_limit`/`expires_at` 字段，用户侧无法设置 Key 限流与换绑分组。已补全（含分组存在性校验）。
 - 覆盖项：登录/CSRF/越权、仪表盘、统计报表、用户/分组/渠道/Key/模型价格 CRUD、`_method` 覆写（WAF 兼容）、一键获取上游模型（真实 DeepSeek 返回 deepseek-flash/deepseek-v4-pro）、渠道模型定时同步、网关四路径（/v1/models、非流式、SSE 流式含 usage、404/401/403 错误路径）、Anthropic 协议、兑换码、限流 429、cron 触发与错误 token 拒绝、审计、余额与计费一致性（balance = 100 - 消费）。
+
+## 11. 第五轮：Key 随时查看功能
+
+- 需求：API Key 不再"仅创建时显示一次"，创建后可随时查看。
+- 实现：迁移 004 新增 `api_keys.key_enc`（AES-256-GCM 加密存储明文，沿用应用密钥）；新增 `GET /api/user/keys/{id}/key` 与 `GET /api/admin/keys/{id}/key` 服务端解密回显（均记录 key_reveal 审计）；轮换同步更新加密值；前端"我的 Key"与"全站 Key 管理"增加"查看"按钮（弹窗展示 + 一键复制）。
+- 兼容性说明：旧版创建的 Key 只有哈希、无法回显，查看时明确提示"请轮换生成新 Key"。
+- 验证：沙箱 SQLite 46/46 + MySQL 46/46 通过；生产环境实测创建 `sk-s2a-e328…` → 随后调 reveal 接口返回明文一致 → 该 Key 调用 /v1/models 正常。生产迁移 004 已执行。
